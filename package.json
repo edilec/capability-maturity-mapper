@@ -1,0 +1,17 @@
+{
+  "name": "capability-maturity-mapper",
+  "version": "0.0.0",
+  "description": "Map capability maturity from repeatability, control, evidence and ownership.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/edilec/capability-maturity-mapper"
+  }
+}
