@@ -1,25 +1,11 @@
 # Capability Maturity Mapper
 
-Map capability maturity from repeatability, control, evidence and ownership.
+Score a user supplied rubric against dated local evidence of repeatability, controls and recovery. Verified, documented `met` criteria contribute to a weighted score; self ratings never do. Offline, read-only Node.js 22+ tool with no dependencies.
 
-- **Repository:** [edilec/capability-maturity-mapper](https://github.com/edilec/capability-maturity-mapper)
-- **Area:** Product & Operations
-- **License:** MIT
+```sh
+node bin/capability-maturity-mapper.mjs --root examples/pass --rubric rubric.json --evidence evidence.json
+node bin/capability-maturity-mapper.mjs --root examples/fail --rubric rubric.json --evidence evidence.json
+npm run check
+```
 
-## Scope
-
-This repository is a focused Edilec engineering utility. Its implementation, tests, usage examples, release notes, and security guidance will be kept in this repository as the tool is built. It does not contain client work, production data, credentials, or copied source from another project.
-
-## Repository layout
-
-- `src/` — implementation
-- `test/` — deterministic tests and fixtures
-- `docs/` — design notes, limits, and usage guidance
-
-## Development
-
-The first implementation should document its input contract, output contract, limits, failure behavior, and verification command before a release is made.
-
-## License
-
-MIT. See [LICENSE](./LICENSE).
+The first command exits 0 with a score of 100. The second exits 1 because a documented control is not met. Missing, stale, ambiguous, self rated or inaccessible evidence exits 2 as `incomplete` and earns no verified credit. The output uses ordinal capability labels and logical source roles; raw capability names, criterion IDs and artifact paths stay private. `src/index.mjs` exports `TOOL_ID` and `evaluateMaturity` for direct use. See [rules and limits](docs/README.md).

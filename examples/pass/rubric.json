@@ -1,0 +1,1 @@
+{"schemaVersion":"1","capabilities":[{"id":"service-recovery","criteria":[{"id":"runbook","dimension":"recovery","weight":1,"maxAgeDays":30}]}]}
