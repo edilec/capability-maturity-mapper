@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { main } from '../bin/capability-maturity-mapper.mjs';
 
 const cli = new URL('../bin/capability-maturity-mapper.mjs', import.meta.url).pathname;
 const rubric = { schemaVersion: '1', capabilities: [{ id: 'private-capability', criteria: [
@@ -120,5 +121,25 @@ test('JSON byte boundary and strict UTF-8 protect input evidence', () => {
     const badUtf8 = invoke();
     assert.equal(badUtf8.status, 2);
     assert.equal(JSON.parse(badUtf8.stdout).status, 'incomplete');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+test('injected CLI deadline accepts 5000 milliseconds and times out at 5001', () => {
+  const root = mkdtempSync(join(tmpdir(), 'maturity-clock-'));
+  try {
+    writeFileSync(join(root, 'rubric.json'), JSON.stringify(rubric));
+    writeFileSync(join(root, 'evidence.json'), JSON.stringify(evidence));
+    writeFileSync(join(root, 'proof.txt'), 'synthetic evidence');
+    const args = ['--root', root, '--rubric', 'rubric.json', '--evidence', 'evidence.json'];
+    const invoke = clock => {
+      let stdout = '';
+      const code = main(args, clock, { write: s => { stdout += s; } }, { write: () => {} });
+      return { code, report: JSON.parse(stdout) };
+    };
+    let calls = 0;
+    assert.equal(invoke(() => calls++ === 0 ? 100 : 5100).code, 0);
+    calls = 0;
+    const beyond = invoke(() => calls++ === 0 ? 100 : 5101);
+    assert.equal(beyond.code, 2);
+    assert.ok(beyond.report.findings.some(f => f.ruleId === 'timeout'));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

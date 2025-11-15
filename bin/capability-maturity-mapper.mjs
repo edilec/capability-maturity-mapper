@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { resolve, relative, isAbsolute } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { TOOL_ID, SEVERITY, report, evaluateMaturity } from '../src/index.mjs';
 
 const MAX_BYTES = 262144, MAX_DEPTH = 4, MAX_RUNTIME_MS = 5000;
@@ -9,9 +10,9 @@ const safeName = name => typeof name === 'string' && name.length > 0 && name.len
 const inside = (root, path) => { const rel = relative(root, path); return rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel); };
 const finding = (ruleId, role, message) => ({ ruleId, severity: SEVERITY[ruleId], message, location: { file: role, pointer: '' } });
 
-function readJson(root, name, role, deadline) {
+function readJson(root, name, role, expired) {
   try {
-    if (Date.now() > deadline) return { error: finding('timeout', role, 'Evaluation exceeded its runtime limit') };
+    if (expired()) return { error: finding('timeout', role, 'Evaluation exceeded its runtime limit') };
     const path = realpathSync(resolve(root, name));
     if (!inside(root, path) || !statSync(path).isFile()) throw Error();
     if (statSync(path).size > MAX_BYTES) return { error: finding('input-too-large', role, 'Input exceeds 262144 bytes') };
@@ -20,7 +21,7 @@ function readJson(root, name, role, deadline) {
     const doc = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
     const stack = [[doc, 0]];
     while (stack.length) {
-      if (Date.now() > deadline) return { error: finding('timeout', role, 'Evaluation exceeded its runtime limit') };
+      if (expired()) return { error: finding('timeout', role, 'Evaluation exceeded its runtime limit') };
       const [value, depth] = stack.pop();
       if (depth > MAX_DEPTH) return { error: finding('depth-limit', role, 'JSON nesting exceeds depth four') };
       if (value !== null && typeof value === 'object') for (const child of Object.values(value)) if (child !== null && typeof child === 'object') stack.push([child, depth + 1]);
@@ -29,29 +30,30 @@ function readJson(root, name, role, deadline) {
   } catch { return { error: finding('input-unavailable', role, 'Input could not be read, decoded or parsed') }; }
 }
 
-function main(argv) {
-  if (argv.length === 1 && argv[0] === '--help') { process.stdout.write(`${usage}\n`); return 0; }
+export function main(argv, now = Date.now, output = process.stdout, error = process.stderr) {
+  if (argv.length === 1 && argv[0] === '--help') { output.write(`${usage}\n`); return 0; }
   const args = {};
   for (let i = 0; i < argv.length; i += 2) {
-    if (!['--root', '--rubric', '--evidence'].includes(argv[i]) || !argv[i + 1] || Object.hasOwn(args, argv[i])) { process.stderr.write(`${usage}\n`); return 2; }
+    if (!['--root', '--rubric', '--evidence'].includes(argv[i]) || !argv[i + 1] || Object.hasOwn(args, argv[i])) { error.write(`${usage}\n`); return 2; }
     args[argv[i]] = argv[i + 1];
   }
-  if (Object.keys(args).length !== 3 || !safeName(args['--rubric']) || !safeName(args['--evidence'])) { process.stderr.write(`${usage}\n`); return 2; }
+  if (Object.keys(args).length !== 3 || !safeName(args['--rubric']) || !safeName(args['--evidence'])) { error.write(`${usage}\n`); return 2; }
   let root;
   try { root = realpathSync(args['--root']); if (!statSync(root).isDirectory()) throw Error(); }
-  catch { process.stderr.write('Root must be a readable directory\n'); return 2; }
-  const deadline = Date.now() + MAX_RUNTIME_MS;
-  const rubric = readJson(root, args['--rubric'], '@rubric', deadline);
-  const evidence = readJson(root, args['--evidence'], '@evidence', deadline);
+  catch { error.write('Root must be a readable directory\n'); return 2; }
+  const deadline = now() + MAX_RUNTIME_MS;
+  const expired = () => now() > deadline;
+  const rubric = readJson(root, args['--rubric'], '@rubric', expired);
+  const evidence = readJson(root, args['--evidence'], '@evidence', expired);
   const errors = [rubric.error, evidence.error].filter(Boolean);
   const artifactExists = name => {
     if (!safeName(name)) return false;
     try { const path = realpathSync(resolve(root, name)); return inside(root, path) && statSync(path).isFile(); }
     catch { return false; }
   };
-  const result = errors.length ? report(errors) : evaluateMaturity(rubric.value, evidence.value, { artifactExists, deadline });
-  process.stdout.write(`${JSON.stringify(result)}\n`);
-  process.stderr.write(`${result.status}: ${result.summary.checked} criteria, ${result.findings.length} findings\n`);
+  const result = errors.length ? report(errors) : evaluateMaturity(rubric.value, evidence.value, { artifactExists, deadline, now });
+  output.write(`${JSON.stringify(result)}\n`);
+  error.write(`${result.status}: ${result.summary.checked} criteria, ${result.findings.length} findings\n`);
   return result.status === 'pass' ? 0 : result.status === 'fail' ? 1 : 2;
 }
-process.exitCode = main(process.argv.slice(2));
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main(process.argv.slice(2));

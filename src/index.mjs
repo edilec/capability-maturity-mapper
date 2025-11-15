@@ -23,7 +23,7 @@ export function report(findings, checked = 0, capabilities = []) {
 export function evaluateMaturity(rubric, evidence, options = {}) {
   const artifactExists = options.artifactExists ?? (() => false);
   const deadline = options.deadline ?? Infinity;
-  const now = options.now ?? (() => Date.now());
+  const now = options.now ?? Date.now;
   const expired = () => deadline !== Infinity && now() > deadline;
   if (expired()) return report([finding('timeout', '@rubric', '', 'Evaluation exceeded its runtime limit')]);
   if (!keys(rubric, ['schemaVersion', 'capabilities']) || rubric.schemaVersion !== '1' || !Array.isArray(rubric.capabilities) || rubric.capabilities.length === 0 || rubric.capabilities.length > 100) return report([finding('input-invalid', '@rubric', '', 'Rubric shape is invalid')]);
