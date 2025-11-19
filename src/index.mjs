@@ -69,5 +69,6 @@ export function evaluateMaturity(rubric, evidence, options = {}) {
     }
     scored.push({ capability: `capability-${ci + 1}`, assessmentDate: evidence.assessedAt.slice(0, 10), score: Math.round(verifiedWeight * 10000 / totalWeight) / 100, verifiedCriteria: verified, totalCriteria: cap.criteria.length });
   }
+  if (expired()) return report([finding('timeout', '@rubric', '', 'Evaluation exceeded its runtime limit')]);
   return report(findings, criteria.length, scored);
 }
